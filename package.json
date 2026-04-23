@@ -1,0 +1,24 @@
+{
+  "name": "claude-voice-input",
+  "version": "1.0.0",
+  "description": "Local privacy-first voice input for Claude Code. Speak your prompt, text is injected directly — no audio leaves your machine.",
+  "bin": {
+    "claude-voice-input": "bin/claude-voice-input.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "commands",
+    "hooks",
+    ".claude-plugin",
+    "assets",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node test/platform.test.js && node test/transcriber.test.js && node test/installer.test.js"
+  },
+  "license": "MIT"
+}
