@@ -10,6 +10,5 @@
   "repository": "https://github.com/arpan-k09/claude-voice-input",
   "license": "MIT",
   "keywords": ["voice", "speech", "dictation", "input", "privacy", "local", "accessibility"],
-  "commands": "./commands/voice-input.md",
-  "hooks": "./hooks/hooks.json"
+  "commands": "./commands/voice-input.md"
 }
