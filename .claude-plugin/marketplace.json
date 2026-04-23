@@ -1,0 +1,29 @@
+{
+  "name": "claude-voice-input",
+  "owner": {
+    "name": "Arpan Korat",
+    "url": "https://github.com/arpan-k09"
+  },
+  "metadata": {
+    "description": "Local privacy-first voice input for Claude Code.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "claude-voice-input",
+      "source": "./",
+      "description": "Speak your prompt, text is injected directly — no audio leaves your machine.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Arpan Korat",
+        "url": "https://github.com/arpan-k09"
+      },
+      "homepage": "https://github.com/arpan-k09/claude-voice-input",
+      "repository": "https://github.com/arpan-k09/claude-voice-input",
+      "license": "MIT",
+      "keywords": ["voice", "speech", "dictation", "input", "privacy", "local"],
+      "category": "productivity",
+      "tags": ["voice", "speech", "dictation", "accessibility"]
+    }
+  ]
+}
