@@ -165,6 +165,105 @@ function _sapiCmd(audioFile) {
   return { bin: 'powershell', args: ['-NoProfile', '-Command', ps] };
 }
 
+// Returns the Swift source for the streaming STT helper used by bin/stream.js.
+// Reads mic via AVAudioEngine, runs SFSpeechAudioBufferRecognitionRequest with
+// partial results, emits one line per update to stdout:
+//   "P <text>\n" for partial results
+//   "F <text>\n" for final (segment boundary) results
+// Runs until SIGTERM. Prints errors to stderr and exits non-zero on failure.
+function streamSttScript(locale) {
+  const safeLocale = (locale || 'en-US').replace(/"/g, '\\"');
+  return `
+import Speech
+import AVFoundation
+import Foundation
+
+let stderr = FileHandle.standardError
+let stdout = FileHandle.standardOutput
+func logErr(_ s: String) { stderr.write((s + "\\n").data(using: .utf8)!) }
+func emit(_ s: String) { stdout.write(s.data(using: .utf8)!) }
+
+let authSem = DispatchSemaphore(value: 0)
+var authStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
+SFSpeechRecognizer.requestAuthorization { s in authStatus = s; authSem.signal() }
+authSem.wait()
+guard authStatus == .authorized else {
+    logErr("Speech recognition not authorized. Grant access in System Settings > Privacy & Security > Speech Recognition.")
+    exit(2)
+}
+
+guard let rec = SFSpeechRecognizer(locale: Locale(identifier: "${safeLocale}")), rec.isAvailable else {
+    logErr("SFSpeechRecognizer unavailable for locale ${safeLocale}.")
+    exit(3)
+}
+
+let engine = AVAudioEngine()
+let req = SFSpeechAudioBufferRecognitionRequest()
+req.shouldReportPartialResults = true
+
+let input = engine.inputNode
+let fmt = input.outputFormat(forBus: 0)
+input.installTap(onBus: 0, bufferSize: 1024, format: fmt) { buffer, _ in
+    req.append(buffer)
+}
+
+engine.prepare()
+do {
+    try engine.start()
+} catch {
+    logErr("AVAudioEngine start failed: \\(error.localizedDescription)")
+    exit(4)
+}
+
+var lastEmitted = ""
+let task = rec.recognitionTask(with: req) { res, err in
+    if let err = err {
+        logErr("Recognition error: \\(err.localizedDescription)")
+        return
+    }
+    guard let res = res else { return }
+    let text = res.bestTranscription.formattedString
+    if text == lastEmitted && !res.isFinal { return }
+    lastEmitted = text
+    let prefix = res.isFinal ? "F " : "P "
+    emit(prefix + text + "\\n")
+}
+
+let termSrc = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+termSrc.setEventHandler {
+    engine.stop()
+    input.removeTap(onBus: 0)
+    req.endAudio()
+    task.cancel()
+    exit(0)
+}
+signal(SIGTERM, SIG_IGN)
+termSrc.resume()
+
+let intSrc = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+intSrc.setEventHandler {
+    engine.stop()
+    input.removeTap(onBus: 0)
+    req.endAudio()
+    task.cancel()
+    exit(0)
+}
+signal(SIGINT, SIG_IGN)
+intSrc.resume()
+
+RunLoop.main.run()
+`.trim();
+}
+
+// Returns command to launch the streaming STT Swift helper.
+// Writes the Swift source to a temp file, returns {bin, args, cleanup}.
+function swiftStreamCmd(locale) {
+  const script = streamSttScript(locale);
+  const swiftFile = path.join(os.tmpdir(), `cvi-stream-${Date.now()}.swift`);
+  fs.writeFileSync(swiftFile, script);
+  return { bin: 'swift', args: [swiftFile], cleanup: swiftFile };
+}
+
 // Returns whisper config if opt-in binary+model exist: { bin, buildArgs(audioFile) } or null.
 function whisperConfig() {
   const binPath = path.join(whisperDir(), 'main');
@@ -221,6 +320,8 @@ module.exports = {
   sttConfig,
   whisperConfig,
   injectionCmd,
+  streamSttScript,
+  swiftStreamCmd,
   _escapeOsascript,
   _escapeSendKeys,
   _winRecorderConfig,

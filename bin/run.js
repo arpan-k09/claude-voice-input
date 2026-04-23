@@ -3,12 +3,14 @@
 'use strict';
 
 // Invoked by the /voice-input slash command.
-// Thin orchestrator: record → transcribe → inject, always cleans up temp file.
+// On macOS (non-test): delegates to bin/stream.js for live streaming STT.
+// On Linux/Windows or --test: thin orchestrator — record → transcribe → inject.
 
 const recorder = require('../src/recorder');
 const transcriber = require('../src/transcriber');
 const injector = require('../src/injector');
 const fs = require('fs');
+const path = require('path');
 
 const args = process.argv.slice(2);
 const testMode = args.includes('--test');
@@ -16,6 +18,10 @@ const langIdx = args.indexOf('--lang');
 if (langIdx !== -1 && args[langIdx + 1]) {
   process.env.VOICE_INPUT_LANG = args[langIdx + 1];
 }
+
+if (process.platform === 'darwin' && !testMode) {
+  require(path.join(__dirname, 'stream.js')).main();
+} else {
 
 (async () => {
   let audioFile = null;
@@ -48,3 +54,5 @@ if (langIdx !== -1 && args[langIdx + 1]) {
     }
   }
 })();
+
+}

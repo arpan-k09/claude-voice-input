@@ -5,50 +5,54 @@ description: Record your voice locally, transcribe on-device, and inject the tex
 
 When the user types `/voice-input`, execute the following:
 
-## Voice Input Flow
+## Voice Input Flow (macOS — streaming)
 
-1. Run `node "$CLAUDE_PLUGIN_ROOT/bin/run.js"` as a subprocess.
-   - The subprocess records the user's microphone, transcribes locally, and injects the transcript into the active terminal via OS accessibility APIs.
-   - Status messages are written to stderr (Recording... / Transcribing... / Injecting:).
-   - Exits 0 on success, 1 on error.
+1. Spawn `node "$CLAUDE_PLUGIN_ROOT/bin/run.js"` in the background. Do **not** wait for it to exit.
+2. The subprocess types transcribed text into the focused prompt buffer via `osascript` as the user speaks, using `SFSpeechRecognizer` with `shouldReportPartialResults = true`. Earlier guesses are replaced by refined ones (backspace + retype).
+3. When the user presses Enter, the plugin's `UserPromptSubmit` hook sends `SIGTERM` to the subprocess, which stops recording and exits. Claude Code submits whatever text is currently in the prompt — that's the dictated message.
+4. Because the text lives in the prompt buffer, the user can also edit it before pressing Enter.
 
-2. Wait for the subprocess to complete.
+**Do not use the subprocess's stdout as the user's next message on macOS.** The message is the prompt buffer contents at Enter time.
 
-3. If the subprocess exits 0 and produced output on stdout, treat that output as the user's dictated text and use it as the next user message.
+## Voice Input Flow (Linux / Windows — one-shot)
 
-4. If the subprocess exits non-zero, report the error message from stderr to the user.
+1. Run `node "$CLAUDE_PLUGIN_ROOT/bin/run.js"` and wait for it to complete.
+2. The subprocess records, transcribes, and injects the final transcript via OS accessibility APIs.
+3. Status messages go to stderr (`Recording...` / `Transcribing...` / `Injecting:`).
+4. Exits 0 on success, 1 on error.
 
 ## Flags
 
-- `--test`: Record and transcribe without injecting. Prints transcript to stdout. Use to verify your setup:
+- `--test`: Record and transcribe without injecting. Prints transcript to stdout. Uses the one-shot code path on every platform. Use to verify your setup:
   ```
   /voice-input --test
   ```
-- `--lang <code>`: Override language for this session (e.g. `--lang fr-FR`). To persist the setting:
+- `--lang <code>`: Override language for this session (e.g. `--lang fr-FR`). On macOS streaming, sets the `SFSpeechRecognizer` locale. To persist the setting:
   ```
   claude-voice-input --lang fr-FR
   ```
 
-## STT Backends (in priority order)
+## STT Backends
 
-| Backend | How to enable |
-|---------|--------------|
-| whisper.cpp tiny.en | `claude-voice-input setup --whisper` (opt-in, one-time ~39MB download) |
-| macOS SFSpeechRecognizer | Default on macOS; requires Xcode CLT (`xcode-select --install`) |
-| vosk-transcriber | Linux; `pip install vosk` then download a Vosk model |
-| Windows SAPI | Default on Windows via PowerShell System.Speech |
+| Platform | Backend | How to enable |
+|----------|---------|--------------|
+| macOS | `SFSpeechRecognizer` streaming | Default. Grant access in System Settings → Privacy & Security → Speech Recognition. |
+| Linux | whisper.cpp tiny.en | `claude-voice-input setup --whisper` (opt-in, one-time ~39MB download) |
+| Linux | vosk-transcriber | `pip install vosk` then download a Vosk model |
+| Windows | SAPI | Default, via PowerShell System.Speech |
 
 ## Troubleshooting
 
 **Microphone permission denied (macOS)**
-> Symptom: empty transcript or osascript error.
 > Fix: System Settings → Privacy & Security → Microphone → enable your terminal app.
 
-**No STT backend found**
-> Symptom: `No STT backend found.`
+**Speech recognition not authorized (macOS)**
+> Symptom: `Speech recognition not authorized` in stderr.
+> Fix: System Settings → Privacy & Security → Speech Recognition → enable your terminal app.
+
+**No STT backend found (Linux)**
 > Fix: Run `claude-voice-input setup --whisper` to download the whisper.cpp tiny.en model.
-> Linux alternative: `pip install vosk` and download a Vosk model for your language.
+> Or: `pip install vosk` and download a Vosk model for your language.
 
 **Text injection failed — xdotool not installed (Linux)**
-> Symptom: `Injection (xdotool) failed`
 > Fix: `sudo apt install xdotool` (Debian/Ubuntu) or `sudo dnf install xdotool` (Fedora).
