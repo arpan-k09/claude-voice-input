@@ -136,10 +136,11 @@ guard let rec = SFSpeechRecognizer(locale: Locale(identifier: "en-US")), rec.isA
 let sem = DispatchSemaphore(value: 0)
 var result = ""
 rec.recognitionTask(with: req) { res, err in
-    guard res != nil else { sem.signal(); return }
-    if res!.isFinal { result = res!.bestTranscription.formattedString; sem.signal() }
+    if err != nil { sem.signal(); return }
+    guard let res = res else { sem.signal(); return }
+    if res.isFinal { result = res.bestTranscription.formattedString; sem.signal() }
 }
-sem.wait()
+_ = sem.wait(timeout: .now() + 13.0)
 print(result)
 `.trim();
   const swiftFile = path.join(os.tmpdir(), `cvi-stt-${Date.now()}.swift`);
