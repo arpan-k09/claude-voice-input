@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Local privacy-first voice input for Claude Code.",
-    "version": "1.2.0"
+    "version": "1.4.0"
   },
   "plugins": [
     {
       "name": "claude-voice-input",
       "source": "./",
       "description": "Speak your prompt, text is injected directly — no audio leaves your machine.",
-      "version": "1.2.0",
+      "version": "1.4.0",
       "author": {
         "name": "Arpan Korat",
         "url": "https://github.com/arpan-k09"
