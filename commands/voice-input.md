@@ -36,19 +36,30 @@ When the user types `/voice-input`, execute the following:
 
 | Platform | Backend | How to enable |
 |----------|---------|--------------|
-| macOS | `SFSpeechRecognizer` streaming | Default. Grant access in System Settings → Privacy & Security → Speech Recognition. |
+| macOS | sox continuous + whisper-cli chunked | Requires `brew install sox whisper-cpp` and the tiny.en model at `~/.claude/claude-voice-input/whisper/models/ggml-tiny.en.bin`. Fully local; no system speech API is used (avoids TCC). |
 | Linux | whisper.cpp tiny.en | `claude-voice-input setup --whisper` (opt-in, one-time ~39MB download) |
 | Linux | vosk-transcriber | `pip install vosk` then download a Vosk model |
 | Windows | SAPI | Default, via PowerShell System.Speech |
+
+## First-time macOS setup
+
+```
+brew install sox whisper-cpp
+mkdir -p ~/.claude/claude-voice-input/whisper/models
+curl -L -o ~/.claude/claude-voice-input/whisper/models/ggml-tiny.en.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin
+```
+
+Grant your terminal microphone access in System Settings → Privacy & Security → Microphone.
 
 ## Troubleshooting
 
 **Microphone permission denied (macOS)**
 > Fix: System Settings → Privacy & Security → Microphone → enable your terminal app.
 
-**Speech recognition not authorized (macOS)**
-> Symptom: `Speech recognition not authorized` in stderr.
-> Fix: System Settings → Privacy & Security → Speech Recognition → enable your terminal app.
+**Whisper is not set up (macOS)**
+> Symptom: `Whisper is not set up.` in stderr.
+> Fix: Run the "First-time macOS setup" commands above.
 
 **No STT backend found (Linux)**
 > Fix: Run `claude-voice-input setup --whisper` to download the whisper.cpp tiny.en model.

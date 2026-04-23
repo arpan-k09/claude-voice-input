@@ -133,11 +133,16 @@ async function shutdown(swiftChild) {
 }
 
 function main() {
-  const locale = process.env.VOICE_INPUT_LANG || 'en-US';
-  const cmd = platform.swiftStreamCmd(locale);
-
   takeOverIfRunning();
   writePid();
+
+  // macOS streaming uses our whisper-based STT helper. Pass through env so
+  // VOICE_INPUT_LANG etc. reach the child. Tests can override the STT
+  // subprocess via CVI_STT_CMD (a single-binary path that takes no args).
+  const sttPath = path.join(__dirname, 'stt-whisper.js');
+  const cmd = process.env.CVI_STT_CMD
+    ? { bin: process.env.CVI_STT_CMD, args: [], cleanup: null }
+    : { bin: process.execPath, args: [sttPath], cleanup: null };
 
   const child = spawn(cmd.bin, cmd.args, { stdio: ['ignore', 'pipe', 'pipe'] });
 

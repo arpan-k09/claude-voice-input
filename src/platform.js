@@ -63,6 +63,25 @@ function _soxConfig() {
   };
 }
 
+// Continuous (no silence detection) sox recorder. Runs until SIGTERM.
+// Used by the streaming STT path on macOS.
+function continuousRecorderConfig() {
+  if (PLATFORM === 'darwin' || PLATFORM === 'linux') {
+    if (hasBinary('rec')) {
+      return {
+        bin: 'rec',
+        buildArgs(outFile) {
+          return [
+            '-q', '-r', '16000', '-c', '1', '-e', 'signed', '-b', '16',
+            outFile,
+          ];
+        },
+      };
+    }
+  }
+  return null;
+}
+
 function _arecordConfig() {
   return {
     bin: 'arecord',
@@ -264,17 +283,36 @@ function swiftStreamCmd(locale) {
   return { bin: 'swift', args: [swiftFile], cleanup: swiftFile };
 }
 
-// Returns whisper config if opt-in binary+model exist: { bin, buildArgs(audioFile) } or null.
+// Returns whisper config if a usable whisper binary and the tiny.en model exist.
+// Prefers brew's system whisper-cli if present; otherwise uses the locally-built
+// binary from `claude-voice-input setup --whisper`. Returns null if neither path
+// has both a binary and the model file.
 function whisperConfig() {
-  const binPath = path.join(whisperDir(), 'main');
   const modelPath = path.join(whisperDir(), 'models', 'ggml-tiny.en.bin');
-  if (!fs.existsSync(binPath) || !fs.existsSync(modelPath)) return null;
-  return {
-    bin: binPath,
-    buildArgs(audioFile) {
-      return ['-m', modelPath, '-f', audioFile, '--no-timestamps', '-otxt'];
-    },
-  };
+  if (!fs.existsSync(modelPath)) return null;
+
+  // Local build from setup --whisper.
+  const localBin = path.join(whisperDir(), 'main');
+  if (fs.existsSync(localBin)) {
+    return {
+      bin: localBin,
+      buildArgs(audioFile) {
+        return ['-m', modelPath, '-f', audioFile, '--no-timestamps', '-otxt'];
+      },
+    };
+  }
+
+  // Brew-installed whisper-cli.
+  if (hasBinary('whisper-cli')) {
+    return {
+      bin: 'whisper-cli',
+      buildArgs(audioFile) {
+        return ['-m', modelPath, '-f', audioFile, '--no-timestamps', '-otxt'];
+      },
+    };
+  }
+
+  return null;
 }
 
 // Returns injection command: { bin, args } or null.
@@ -317,6 +355,7 @@ module.exports = {
   configPath,
   hasBinary,
   recorderConfig,
+  continuousRecorderConfig,
   sttConfig,
   whisperConfig,
   injectionCmd,

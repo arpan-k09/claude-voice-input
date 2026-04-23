@@ -26,9 +26,11 @@ function makeSandbox(scriptedLines) {
   const osaLog = path.join(tmp, 'osa.log');
   fs.writeFileSync(osaLog, '');
 
-  // Bake the scripted lines directly into the mock — no env required.
+  // Mock STT helper: emits scripted P/F lines then parks until SIGTERM.
+  // Invoked directly (via CVI_STT_CMD); no PATH/arg indirection.
   const linesJson = JSON.stringify(scriptedLines);
-  const mockSwift = `#!/usr/bin/env node
+  const mockStt = path.join(mockBin, 'mock-stt.js');
+  const mockSttSource = `#!/usr/bin/env node
 const lines = ${linesJson};
 const keepAlive = setInterval(() => {}, 1e6);
 (async () => {
@@ -39,7 +41,7 @@ const keepAlive = setInterval(() => {}, 1e6);
 })();
 process.on('SIGTERM', () => { clearInterval(keepAlive); process.exit(0); });
 `;
-  fs.writeFileSync(path.join(mockBin, 'swift'), mockSwift, { mode: 0o755 });
+  fs.writeFileSync(mockStt, mockSttSource, { mode: 0o755 });
 
   const mockOsa = `#!/usr/bin/env node
 const fs = require('fs');
@@ -48,7 +50,7 @@ process.exit(0);
 `;
   fs.writeFileSync(path.join(mockBin, 'osascript'), mockOsa, { mode: 0o755 });
 
-  return { tmp, mockBin, fakeHome, osaLog };
+  return { tmp, mockBin, fakeHome, osaLog, mockStt };
 }
 
 function runStream(sandbox, { killAfterMs = 1200 } = {}) {
@@ -57,6 +59,7 @@ function runStream(sandbox, { killAfterMs = 1200 } = {}) {
       ...process.env,
       PATH: sandbox.mockBin + ':' + process.env.PATH,
       HOME: sandbox.fakeHome,
+      CVI_STT_CMD: sandbox.mockStt,
     };
     const child = spawn('node', [path.join(repoRoot, 'bin', 'stream.js')], {
       env,
